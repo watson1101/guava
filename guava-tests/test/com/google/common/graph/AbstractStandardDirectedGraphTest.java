@@ -19,15 +19,16 @@ package com.google.common.graph;
 import static com.google.common.graph.GraphConstants.ENDPOINTS_MISMATCH;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.TruthJUnit.assume;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 import java.util.Set;
+import org.jspecify.annotations.NullUnmarked;
 import org.junit.Test;
 
 /**
  * Abstract base class for testing directed {@link Graph} implementations defined in this package.
  */
+@NullUnmarked
 public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTest {
 
   @Override
@@ -36,13 +37,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
     assume().that(graphIsMutable()).isTrue();
 
     Set<Integer> nodes = graph.nodes();
-    try {
-      nodes.add(N2);
-      fail(ERROR_MODIFIABLE_SET);
-    } catch (UnsupportedOperationException e) {
-      addNode(N1);
-      assertThat(graph.nodes()).containsExactlyElementsIn(nodes);
-    }
+    assertThrows(UnsupportedOperationException.class, () -> nodes.add(N2));
+    addNode(N1);
+    assertThat(graph.nodes()).containsExactlyElementsIn(nodes);
   }
 
   @Override
@@ -52,13 +49,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
 
     addNode(N1);
     Set<Integer> adjacentNodes = graph.adjacentNodes(N1);
-    try {
-      adjacentNodes.add(N2);
-      fail(ERROR_MODIFIABLE_SET);
-    } catch (UnsupportedOperationException e) {
-      putEdge(N1, N2);
-      assertThat(graph.adjacentNodes(N1)).containsExactlyElementsIn(adjacentNodes);
-    }
+    assertThrows(UnsupportedOperationException.class, () -> adjacentNodes.add(N2));
+    putEdge(N1, N2);
+    assertThat(graph.adjacentNodes(N1)).containsExactlyElementsIn(adjacentNodes);
   }
 
   @Override
@@ -68,13 +61,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
 
     addNode(N2);
     Set<Integer> predecessors = graph.predecessors(N2);
-    try {
-      predecessors.add(N1);
-      fail(ERROR_MODIFIABLE_SET);
-    } catch (UnsupportedOperationException e) {
-      putEdge(N1, N2);
-      assertThat(graph.predecessors(N2)).containsExactlyElementsIn(predecessors);
-    }
+    assertThrows(UnsupportedOperationException.class, () -> predecessors.add(N1));
+    putEdge(N1, N2);
+    assertThat(graph.predecessors(N2)).containsExactlyElementsIn(predecessors);
   }
 
   @Override
@@ -84,13 +73,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
 
     addNode(N1);
     Set<Integer> successors = graph.successors(N1);
-    try {
-      successors.add(N2);
-      fail(ERROR_MODIFIABLE_SET);
-    } catch (UnsupportedOperationException e) {
-      putEdge(N1, N2);
-      assertThat(successors).containsExactlyElementsIn(graph.successors(N1));
-    }
+    assertThrows(UnsupportedOperationException.class, () -> successors.add(N2));
+    putEdge(N1, N2);
+    assertThat(successors).containsExactlyElementsIn(graph.successors(N1));
   }
 
   @Override
@@ -100,13 +85,10 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
 
     addNode(N1);
     Set<EndpointPair<Integer>> incidentEdges = graph.incidentEdges(N1);
-    try {
-      incidentEdges.add(EndpointPair.ordered(N1, N2));
-      fail(ERROR_MODIFIABLE_SET);
-    } catch (UnsupportedOperationException e) {
-      putEdge(N1, N2);
-      assertThat(incidentEdges).containsExactlyElementsIn(graph.incidentEdges(N1));
-    }
+    assertThrows(
+        UnsupportedOperationException.class, () -> incidentEdges.add(EndpointPair.ordered(N1, N2)));
+    putEdge(N1, N2);
+    assertThat(incidentEdges).containsExactlyElementsIn(graph.incidentEdges(N1));
   }
 
   @Test
@@ -166,6 +148,17 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
     putEdge(N1, N2);
     assertThat(graph.hasEdgeConnecting(EndpointPair.unordered(N1, N2))).isFalse();
     assertThat(graph.hasEdgeConnecting(EndpointPair.unordered(N2, N1))).isFalse();
+  }
+
+  @Test
+  public void hasEdgeConnecting_missingNode() {
+    // both nodes missing
+    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(NODE_NOT_IN_GRAPH, NODE_NOT_IN_GRAPH)))
+        .isFalse();
+
+    // one node present, the other missing
+    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(NODE_NOT_IN_GRAPH, N4))).isFalse();
+    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(N4, NODE_NOT_IN_GRAPH))).isFalse();
   }
 
   @Test
@@ -364,12 +357,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
     assume().that(graphIsMutable()).isTrue();
 
     EndpointPair<Integer> endpoints = EndpointPair.unordered(N1, N2);
-    try {
-      graphAsMutableGraph.putEdge(endpoints);
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(IllegalArgumentException.class, () -> graphAsMutableGraph.putEdge(endpoints));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   /**
@@ -382,9 +372,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
     assume().that(graphIsMutable()).isTrue();
 
     graphAsMutableGraph.addNode(N1);
-    assertTrue(graphAsMutableGraph.putEdge(N1, N5));
-    assertTrue(graphAsMutableGraph.putEdge(N4, N1));
-    assertTrue(graphAsMutableGraph.putEdge(N2, N3));
+    assertThat(graphAsMutableGraph.putEdge(N1, N5)).isTrue();
+    assertThat(graphAsMutableGraph.putEdge(N4, N1)).isTrue();
+    assertThat(graphAsMutableGraph.putEdge(N2, N3)).isTrue();
     assertThat(graph.nodes()).containsExactly(N1, N5, N4, N2, N3).inOrder();
     assertThat(graph.successors(N1)).containsExactly(N5);
     assertThat(graph.successors(N2)).containsExactly(N3);
@@ -398,12 +388,9 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
     assume().that(graphIsMutable()).isTrue();
     assume().that(graph.allowsSelfLoops()).isFalse();
 
-    try {
-      graphAsMutableGraph.putEdge(N1, N1);
-      fail(ERROR_ADDED_SELF_LOOP);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ERROR_SELF_LOOP);
-    }
+    IllegalArgumentException e =
+        assertThrows(IllegalArgumentException.class, () -> graphAsMutableGraph.putEdge(N1, N1));
+    assertThat(e).hasMessageThat().contains(ERROR_SELF_LOOP);
   }
 
   @Test
@@ -449,12 +436,10 @@ public abstract class AbstractStandardDirectedGraphTest extends AbstractGraphTes
 
     putEdge(N1, N2);
     EndpointPair<Integer> endpoints = EndpointPair.unordered(N1, N2);
-    try {
-      graphAsMutableGraph.removeEdge(endpoints);
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graphAsMutableGraph.removeEdge(endpoints));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test

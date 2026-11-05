@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.base.Ascii;
 import com.google.common.base.Equivalence;
 import com.google.common.base.MoreObjects;
@@ -30,7 +31,7 @@ import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A builder of {@link ConcurrentMap} instances that can have keys or values automatically wrapped
@@ -38,12 +39,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>Usage example:
  *
- * <pre>{@code
+ * {@snippet :
  * ConcurrentMap<Request, Stopwatch> timers = new MapMaker()
  *     .concurrencyLevel(4)
  *     .weakKeys()
  *     .makeMap();
- * }</pre>
+ * }
  *
  * <p>These features are all optional; {@code new MapMaker().makeMap()} returns a valid concurrent
  * map that behaves similarly to a {@link ConcurrentHashMap}.
@@ -85,7 +86,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @author Kevin Bourrillion
  * @since 2.0
  */
-@GwtCompatible(emulated = true)
+@J2ktIncompatible
+@GwtCompatible
 public final class MapMaker {
   private static final int DEFAULT_INITIAL_CAPACITY = 16;
   private static final int DEFAULT_CONCURRENCY_LEVEL = 4;
@@ -114,7 +116,7 @@ public final class MapMaker {
    *
    * <p>By default, the map uses {@link Equivalence#identity} to determine key equality when {@link
    * #weakKeys} is specified, and {@link Equivalence#equals()} otherwise. The only place this is
-   * used is in {@link Interners.WeakInterner}.
+   * used is in {@link Interners}.
    */
   @CanIgnoreReturnValue
   @GwtIncompatible // To be supported
@@ -205,6 +207,7 @@ public final class MapMaker {
     return setKeyStrength(Strength.WEAK);
   }
 
+  @CanIgnoreReturnValue
   MapMaker setKeyStrength(Strength strength) {
     checkState(keyStrength == null, "Key strength was already set to %s", keyStrength);
     keyStrength = checkNotNull(strength);
@@ -251,6 +254,7 @@ public final class MapMaker {
     VALUE
   }
 
+  @CanIgnoreReturnValue
   MapMaker setValueStrength(Strength strength) {
     checkState(valueStrength == null, "Value strength was already set to %s", valueStrength);
     valueStrength = checkNotNull(strength);

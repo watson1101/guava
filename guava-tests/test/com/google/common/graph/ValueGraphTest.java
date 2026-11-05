@@ -16,20 +16,19 @@
 
 package com.google.common.graph;
 
+import static com.google.common.graph.AbstractNetworkTest.validateNetwork;
 import static com.google.common.graph.GraphConstants.ENDPOINTS_MISMATCH;
 import static com.google.common.graph.TestUtil.assertStronglyEquivalent;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static java.util.concurrent.Executors.newFixedThreadPool;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
-import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import org.jspecify.annotations.NullUnmarked;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -38,6 +37,7 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link StandardMutableValueGraph} and related functionality. */
 // TODO(user): Expand coverage and move to proper test suite.
 @RunWith(JUnit4.class)
+@NullUnmarked
 public final class ValueGraphTest {
   private static final String DEFAULT = "default";
 
@@ -56,6 +56,17 @@ public final class ValueGraphTest {
     assertThat(graph.incidentEdgeOrder()).isEqualTo(asGraph.incidentEdgeOrder());
     assertThat(graph.isDirected()).isEqualTo(asGraph.isDirected());
     assertThat(graph.allowsSelfLoops()).isEqualTo(asGraph.allowsSelfLoops());
+
+    Network<Integer, EndpointPair<Integer>> asNetwork = graph.asNetwork();
+    validateNetwork(asNetwork);
+    assertThat(graph.nodes()).isEqualTo(asNetwork.nodes());
+    assertThat(graph.edges()).hasSize(asNetwork.edges().size());
+    assertThat(graph.nodeOrder()).isEqualTo(asNetwork.nodeOrder());
+    assertThat(graph.isDirected()).isEqualTo(asNetwork.isDirected());
+    assertThat(graph.allowsSelfLoops()).isEqualTo(asNetwork.allowsSelfLoops());
+    assertThat(asNetwork.edgeOrder()).isEqualTo(ElementOrder.unordered());
+    assertThat(asNetwork.allowsParallelEdges()).isFalse();
+    assertThat(asNetwork.asGraph()).isEqualTo(graph.asGraph());
 
     for (Integer node : graph.nodes()) {
       assertThat(graph.adjacentNodes(node)).isEqualTo(asGraph.adjacentNodes(node));
@@ -175,8 +186,8 @@ public final class ValueGraphTest {
   public void hasEdgeConnecting_undirected_mismatch() {
     graph = ValueGraphBuilder.undirected().build();
     graph.putEdgeValue(1, 2, "A");
-    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(1, 2))).isTrue();
-    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(2, 1))).isTrue();
+    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(1, 2))).isFalse();
+    assertThat(graph.hasEdgeConnecting(EndpointPair.ordered(2, 1))).isFalse();
   }
 
   @Test
@@ -197,13 +208,14 @@ public final class ValueGraphTest {
   public void edgeValue_directed_mismatch() {
     graph = ValueGraphBuilder.directed().build();
     graph.putEdgeValue(1, 2, "A");
-    try {
-      Optional<String> unused = graph.edgeValue(EndpointPair.unordered(1, 2));
-      unused = graph.edgeValue(EndpointPair.unordered(2, 1));
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.edgeValue(EndpointPair.unordered(1, 2)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.edgeValue(EndpointPair.unordered(2, 1)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -224,8 +236,15 @@ public final class ValueGraphTest {
   public void edgeValue_undirected_mismatch() {
     graph = ValueGraphBuilder.undirected().build();
     graph.putEdgeValue(1, 2, "A");
-    assertThat(graph.edgeValue(EndpointPair.ordered(1, 2))).hasValue("A");
-    assertThat(graph.edgeValue(EndpointPair.ordered(2, 1))).hasValue("A");
+    // Check that edgeValue() throws on each possible ordering of an ordered EndpointPair
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.edgeValue(EndpointPair.ordered(1, 2)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.edgeValue(EndpointPair.ordered(2, 1)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -247,13 +266,16 @@ public final class ValueGraphTest {
   public void edgeValueOrDefault_directed_mismatch() {
     graph = ValueGraphBuilder.directed().build();
     graph.putEdgeValue(1, 2, "A");
-    try {
-      String unused = graph.edgeValueOrDefault(EndpointPair.unordered(1, 2), "default");
-      unused = graph.edgeValueOrDefault(EndpointPair.unordered(2, 1), "default");
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.edgeValueOrDefault(EndpointPair.unordered(1, 2), "default"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.edgeValueOrDefault(EndpointPair.unordered(2, 1), "default"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -274,8 +296,17 @@ public final class ValueGraphTest {
   public void edgeValueOrDefault_undirected_mismatch() {
     graph = ValueGraphBuilder.undirected().build();
     graph.putEdgeValue(1, 2, "A");
-    assertThat(graph.edgeValueOrDefault(EndpointPair.ordered(2, 1), "default")).isEqualTo("A");
-    assertThat(graph.edgeValueOrDefault(EndpointPair.ordered(2, 1), "default")).isEqualTo("A");
+    // Check that edgeValueOrDefault() throws on each possible ordering of an ordered EndpointPair
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.edgeValueOrDefault(EndpointPair.ordered(1, 2), "default"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.edgeValueOrDefault(EndpointPair.ordered(2, 1), "default"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -291,18 +322,21 @@ public final class ValueGraphTest {
   @Test
   public void putEdgeValue_directed_orderMismatch() {
     graph = ValueGraphBuilder.directed().build();
-    try {
-      graph.putEdgeValue(EndpointPair.unordered(1, 2), "irrelevant");
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.putEdgeValue(EndpointPair.unordered(1, 2), "irrelevant"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
   public void putEdgeValue_undirected_orderMismatch() {
     graph = ValueGraphBuilder.undirected().build();
-    assertThat(graph.putEdgeValue(EndpointPair.ordered(1, 2), "irrelevant")).isNull();
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> graph.putEdgeValue(EndpointPair.ordered(1, 2), "irrelevant"));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -349,20 +383,29 @@ public final class ValueGraphTest {
     graph = ValueGraphBuilder.directed().build();
     graph.putEdgeValue(1, 2, "1->2");
     graph.putEdgeValue(2, 1, "2->1");
-    try {
-      graph.removeEdge(EndpointPair.unordered(1, 2));
-      graph.removeEdge(EndpointPair.unordered(2, 1));
-      fail("Expected IllegalArgumentException: " + ENDPOINTS_MISMATCH);
-    } catch (IllegalArgumentException e) {
-      assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.removeEdge(EndpointPair.unordered(1, 2)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.removeEdge(EndpointPair.unordered(2, 1)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
   public void removeEdge_undirected_orderMismatch() {
     graph = ValueGraphBuilder.undirected().build();
     graph.putEdgeValue(1, 2, "1-2");
-    assertThat(graph.removeEdge(EndpointPair.ordered(1, 2))).isEqualTo("1-2");
+    // Check that removeEdge() throws on each possible ordering of an ordered EndpointPair
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.removeEdge(EndpointPair.ordered(1, 2)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
+    e =
+        assertThrows(
+            IllegalArgumentException.class, () -> graph.removeEdge(EndpointPair.ordered(2, 1)));
+    assertThat(e).hasMessageThat().contains(ENDPOINTS_MISMATCH);
   }
 
   @Test
@@ -384,8 +427,8 @@ public final class ValueGraphTest {
     assertThat(graph.edgeValueOrDefault(2, 1, DEFAULT)).isEqualTo("valueB");
     assertThat(graph.edgeValueOrDefault(1, 2, null)).isEqualTo("valueA");
     assertThat(graph.edgeValueOrDefault(2, 1, null)).isEqualTo("valueB");
-    assertThat(graph.edgeValue(1, 2).get()).isEqualTo("valueA");
-    assertThat(graph.edgeValue(2, 1).get()).isEqualTo("valueB");
+    assertThat(graph.edgeValue(1, 2)).hasValue("valueA");
+    assertThat(graph.edgeValue(2, 1)).hasValue("valueB");
 
     graph.removeEdge(1, 2);
     graph.putEdgeValue(2, 1, "valueC");
@@ -395,7 +438,7 @@ public final class ValueGraphTest {
     assertThat(graph.edgeValueOrDefault(1, 2, null)).isNull();
     assertThat(graph.edgeValueOrDefault(2, 1, null)).isEqualTo("valueC");
     assertThat(graph.edgeValue(1, 2).orElse(null)).isNull();
-    assertThat(graph.edgeValue(2, 1).get()).isEqualTo("valueC");
+    assertThat(graph.edgeValue(2, 1)).hasValue("valueC");
   }
 
   @Test
@@ -449,26 +492,23 @@ public final class ValueGraphTest {
 
     int threadCount = 20;
     ExecutorService executor = newFixedThreadPool(threadCount);
-    final CyclicBarrier barrier = new CyclicBarrier(threadCount);
+    CyclicBarrier barrier = new CyclicBarrier(threadCount);
     ImmutableList.Builder<Future<?>> futures = ImmutableList.builder();
     for (int i = 0; i < threadCount; i++) {
       futures.add(
           executor.submit(
-              new Callable<Object>() {
-                @Override
-                public Object call() throws Exception {
-                  barrier.await();
-                  Integer first = graph.nodes().iterator().next();
-                  for (Integer node : graph.nodes()) {
-                    Set<Integer> unused = graph.successors(node);
-                  }
-                  /*
-                   * Also look up an earlier node so that, if the graph is using MapRetrievalCache,
-                   * we read one of the fields declared in that class.
-                   */
-                  Set<Integer> unused = graph.successors(first);
-                  return null;
+              () -> {
+                barrier.await();
+                Integer first = graph.nodes().iterator().next();
+                for (Integer node : graph.nodes()) {
+                  Set<Integer> unused = graph.successors(node);
                 }
+                /*
+                 * Also look up an earlier node so that, if the graph is using MapRetrievalCache,
+                 * we read one of the fields declared in that class.
+                 */
+                Set<Integer> unused = graph.successors(first);
+                return null; // so the lambda is a Callable to propagate checked await() exceptions
               }));
     }
 

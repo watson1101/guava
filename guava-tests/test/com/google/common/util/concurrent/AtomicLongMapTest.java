@@ -16,29 +16,35 @@
 
 package com.google.common.util.concurrent;
 
+import static com.google.common.testing.SerializableTester.reserialize;
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
 import com.google.common.testing.NullPointerTester;
-import com.google.common.testing.SerializableTester;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Tests for {@link AtomicLongMap}.
  *
  * @author mike nonemacher
  */
-@GwtCompatible(emulated = true)
+@GwtCompatible
+@NullUnmarked
 public class AtomicLongMapTest extends TestCase {
   private static final int ITERATIONS = 100;
   private static final int MAX_ADDEND = 100;
 
   private final Random random = new Random(301);
 
+  @J2ktIncompatible
   @GwtIncompatible // NullPointerTester
   public void testNulls() {
     NullPointerTester tester = new NullPointerTester();
@@ -52,7 +58,7 @@ public class AtomicLongMapTest extends TestCase {
     Map<String, Long> in = ImmutableMap.of("1", 1L, "2", 2L, "3", 3L);
     AtomicLongMap<String> map = AtomicLongMap.create(in);
     assertFalse(map.isEmpty());
-    assertSame(3, map.size());
+    assertEquals(3, map.size());
     assertTrue(map.containsKey("1"));
     assertTrue(map.containsKey("2"));
     assertTrue(map.containsKey("3"));
@@ -302,7 +308,7 @@ public class AtomicLongMapTest extends TestCase {
     Map<String, Long> in = ImmutableMap.of("1", 1L, "2", 2L, "3", 3L);
     AtomicLongMap<String> map = AtomicLongMap.create();
     assertTrue(map.isEmpty());
-    assertSame(0, map.size());
+    assertEquals(0, map.size());
     assertFalse(map.containsKey("1"));
     assertFalse(map.containsKey("2"));
     assertFalse(map.containsKey("3"));
@@ -312,7 +318,7 @@ public class AtomicLongMapTest extends TestCase {
 
     map.putAll(in);
     assertFalse(map.isEmpty());
-    assertSame(3, map.size());
+    assertEquals(3, map.size());
     assertTrue(map.containsKey("1"));
     assertTrue(map.containsKey("2"));
     assertTrue(map.containsKey("3"));
@@ -482,7 +488,7 @@ public class AtomicLongMapTest extends TestCase {
       map.put(key, newValue);
       assertTrue(map.containsKey(key));
 
-      long before = map.get(key);
+      assertThat(map.get(key)).isEqualTo(newValue);
       assertFalse(map.remove(key, newValue + 1));
       assertFalse(map.remove(key, newValue - 1));
       assertTrue(map.remove(key, newValue));
@@ -516,7 +522,7 @@ public class AtomicLongMapTest extends TestCase {
 
   public void testRemoveZeros() {
     AtomicLongMap<Object> map = AtomicLongMap.create();
-    Set<Object> nonZeroKeys = Sets.newHashSet();
+    Set<Object> nonZeroKeys = new HashSet<>();
     for (int i = 0; i < ITERATIONS; i++) {
       Object key = new Object();
       long value = i % 2;
@@ -570,7 +576,7 @@ public class AtomicLongMapTest extends TestCase {
   public void testSerialization() {
     AtomicLongMap<String> map = AtomicLongMap.create();
     map.put("key", 1L);
-    AtomicLongMap<String> reserialized = SerializableTester.reserialize(map);
+    AtomicLongMap<String> reserialized = reserialize(map);
     assertEquals(map.asMap(), reserialized.asMap());
   }
 }

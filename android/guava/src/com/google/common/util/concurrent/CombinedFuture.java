@@ -19,18 +19,21 @@ import static com.google.common.util.concurrent.AggregateFuture.ReleaseResources
 
 import com.google.common.annotations.GwtCompatible;
 import com.google.common.collect.ImmutableCollection;
+import com.google.errorprone.annotations.concurrent.LazyInit;
+import com.google.j2objc.annotations.RetainedLocalRef;
 import com.google.j2objc.annotations.WeakOuter;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
+import org.jspecify.annotations.Nullable;
 
 /** Aggregate future that computes its value by calling a callable. */
 @GwtCompatible
-final class CombinedFuture<V> extends AggregateFuture<Object, V> {
-  private CombinedFutureInterruptibleTask<?> task;
+final class CombinedFuture<V extends @Nullable Object>
+    extends AggregateFuture<@Nullable Object, V> {
+  @LazyInit private @Nullable CombinedFutureInterruptibleTask<?> task;
 
   CombinedFuture(
       ImmutableCollection<? extends ListenableFuture<?>> futures,
@@ -53,11 +56,11 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
   }
 
   @Override
-  void collectOneValue(int index, @NullableDecl Object returnValue) {}
+  void collectOneValue(int index, @Nullable Object returnValue) {}
 
   @Override
   void handleAllCompleted() {
-    CombinedFutureInterruptibleTask<?> localTask = task;
+    @RetainedLocalRef CombinedFutureInterruptibleTask<?> localTask = task;
     if (localTask != null) {
       localTask.execute();
     }
@@ -80,16 +83,16 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
 
   @Override
   protected void interruptTask() {
-    CombinedFutureInterruptibleTask<?> localTask = task;
+    @RetainedLocalRef CombinedFutureInterruptibleTask<?> localTask = task;
     if (localTask != null) {
       localTask.interruptTask();
     }
   }
 
   @WeakOuter
-  private abstract class CombinedFutureInterruptibleTask<T> extends InterruptibleTask<T> {
+  private abstract class CombinedFutureInterruptibleTask<T extends @Nullable Object>
+      extends InterruptibleTask<T> {
     private final Executor listenerExecutor;
-    boolean thrownByExecute = true;
 
     CombinedFutureInterruptibleTask(Executor listenerExecutor) {
       this.listenerExecutor = checkNotNull(listenerExecutor);
@@ -104,14 +107,12 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
       try {
         listenerExecutor.execute(this);
       } catch (RejectedExecutionException e) {
-        if (thrownByExecute) {
-          CombinedFuture.this.setException(e);
-        }
+        CombinedFuture.this.setException(e);
       }
     }
 
     @Override
-    final void afterRanInterruptibly(T result, Throwable error) {
+    final void afterRanInterruptiblySuccess(@ParametricNullness T result) {
       /*
        * The future no longer needs to interrupt this task, so it no longer needs a reference to it.
        *
@@ -125,20 +126,28 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
        */
       CombinedFuture.this.task = null;
 
-      if (error != null) {
-        if (error instanceof ExecutionException) {
-          CombinedFuture.this.setException(error.getCause());
-        } else if (error instanceof CancellationException) {
-          cancel(false);
-        } else {
-          CombinedFuture.this.setException(error);
-        }
+      setValue(result);
+    }
+
+    @Override
+    final void afterRanInterruptiblyFailure(Throwable error) {
+      // See afterRanInterruptiblySuccess.
+      CombinedFuture.this.task = null;
+
+      if (error instanceof ExecutionException) {
+        /*
+         * Cast to ExecutionException to satisfy our nullness checker, which (unsoundly but
+         * *usually* safely) assumes that getCause() returns non-null on an ExecutionException.
+         */
+        CombinedFuture.this.setException(((ExecutionException) error).getCause());
+      } else if (error instanceof CancellationException) {
+        cancel(false);
       } else {
-        setValue(result);
+        CombinedFuture.this.setException(error);
       }
     }
 
-    abstract void setValue(T value);
+    abstract void setValue(@ParametricNullness T value);
   }
 
   @WeakOuter
@@ -153,7 +162,6 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
 
     @Override
     ListenableFuture<V> runInterruptibly() throws Exception {
-      thrownByExecute = false;
       ListenableFuture<V> result = callable.call();
       return checkNotNull(
           result,
@@ -164,7 +172,7 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
 
     @Override
     void setValue(ListenableFuture<V> value) {
-      CombinedFuture.this.setFuture(value);
+      CombinedFuture.this.setFutureInternal(value);
     }
 
     @Override
@@ -183,13 +191,13 @@ final class CombinedFuture<V> extends AggregateFuture<Object, V> {
     }
 
     @Override
+    @ParametricNullness
     V runInterruptibly() throws Exception {
-      thrownByExecute = false;
       return callable.call();
     }
 
     @Override
-    void setValue(V value) {
+    void setValue(@ParametricNullness V value) {
       CombinedFuture.this.set(value);
     }
 

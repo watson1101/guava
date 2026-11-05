@@ -21,8 +21,8 @@ import static java.lang.Double.POSITIVE_INFINITY;
 import static java.util.Arrays.sort;
 import static java.util.Collections.unmodifiableMap;
 
-import com.google.common.annotations.Beta;
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Ints;
 import java.math.RoundingMode;
@@ -34,30 +34,29 @@ import java.util.Map;
  * Provides a fluent API for calculating <a
  * href="http://en.wikipedia.org/wiki/Quantile">quantiles</a>.
  *
- * <h3>Examples</h3>
+ * <h2>Examples</h2>
  *
  * <p>To compute the median:
  *
- * <pre>{@code
+ * {@snippet :
  * double myMedian = median().compute(myDataset);
- * }</pre>
+ * }
  *
  * where {@link #median()} has been statically imported.
  *
  * <p>To compute the 99th percentile:
  *
- * <pre>{@code
+ * {@snippet :
  * double myPercentile99 = percentiles().index(99).compute(myDataset);
- * }</pre>
+ * }
  *
  * where {@link #percentiles()} has been statically imported.
  *
  * <p>To compute median and the 90th and 99th percentiles:
  *
- * <pre>{@code
- * Map<Integer, Double> myPercentiles =
- *     percentiles().indexes(50, 90, 99).compute(myDataset);
- * }</pre>
+ * {@snippet :
+ * Map<Integer, Double> myPercentiles = percentiles().indexes(50, 90, 99).compute(myDataset);
+ * }
  *
  * where {@link #percentiles()} has been statically imported: {@code myPercentiles} maps the keys
  * 50, 90, and 99, to their corresponding quantile values.
@@ -69,7 +68,7 @@ import java.util.Map;
  * it being arbitrarily reordered, and you want to avoid that copy, you can use {@code
  * computeInPlace} instead of {@code compute}.
  *
- * <h3>Definition and notes on interpolation</h3>
+ * <h2>Definition and notes on interpolation</h2>
  *
  * <p>The definition of the kth q-quantile of N values is as follows: define x = k * (N - 1) / q; if
  * x is an integer, the result is the value which would appear at index x in the sorted dataset
@@ -83,7 +82,7 @@ import java.util.Map;
  * wikipedia</a> as providing "Linear interpolation of the modes for the order statistics for the
  * uniform distribution on [0,1]."
  *
- * <h3>Handling of non-finite values</h3>
+ * <h2>Handling of non-finite values</h2>
  *
  * <p>If any values in the input are {@link Double#NaN NaN} then all values returned are {@link
  * Double#NaN NaN}. (This is the one occasion when the behaviour is not the same as you'd get from
@@ -103,7 +102,7 @@ import java.util.Map;
  * POSITIVE_INFINITY}, {@link Double#NaN NaN} is returned (note that this will only happen if the
  * dataset contains no finite values).
  *
- * <h3>Performance</h3>
+ * <h2>Performance</h2>
  *
  * <p>The average time complexity of the computation is O(N) in the size of the dataset. There is a
  * worst case time complexity of O(N^2). You are extremely unlikely to hit this quadratic case on
@@ -126,9 +125,17 @@ import java.util.Map;
  * @author Pete Gillin
  * @since 20.0
  */
-@Beta
+@J2ktIncompatible
 @GwtIncompatible
 public final class Quantiles {
+  /**
+   * Constructor for a type that is not meant to be instantiated.
+   *
+   * @deprecated Use the static factory methods of the class. There is no reason to create an
+   *     instance of {@link Quantiles}.
+   */
+  @Deprecated
+  public Quantiles() {}
 
   /** Specifies the computation of a median (i.e. the 1st 2-quantile). */
   public static ScaleAndIndex median() {
@@ -482,10 +489,10 @@ public final class Quantiles {
   }
 
   private static void checkIndex(int index, int scale) {
-    if (index < 0 || index > scale) {
-      throw new IllegalArgumentException(
-          "Quantile indexes must be between 0 and the scale, which is " + scale);
-    }
+    checkArgument(
+        index >= 0 && index <= scale,
+        "Quantile indexes must be between 0 and the scale, which is %s",
+        scale);
   }
 
   private static double[] longsToDoubles(long[] longs) {

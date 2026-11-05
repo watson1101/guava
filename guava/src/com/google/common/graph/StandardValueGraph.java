@@ -16,6 +16,7 @@
 
 package com.google.common.graph;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.graph.GraphConstants.DEFAULT_NODE_COUNT;
 import static com.google.common.graph.Graphs.checkNonNegative;
@@ -24,7 +25,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Standard implementation of {@link ValueGraph} that supports the options supplied by {@link
@@ -48,16 +49,15 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
   private final boolean allowsSelfLoops;
   private final ElementOrder<N> nodeOrder;
 
-  protected final MapIteratorCache<N, GraphConnections<N, V>> nodeConnections;
+  final MapIteratorCache<N, GraphConnections<N, V>> nodeConnections;
 
-  protected long edgeCount; // must be updated when edges are added or removed
+  long edgeCount; // must be updated when edges are added or removed
 
   /** Constructs a graph with the properties specified in {@code builder}. */
   StandardValueGraph(AbstractGraphBuilder<? super N> builder) {
     this(
         builder,
-        builder.nodeOrder.<N, GraphConnections<N, V>>createMap(
-            builder.expectedNodeCount.or(DEFAULT_NODE_COUNT)),
+        builder.nodeOrder.createMap(firstNonNull(builder.expectedNodeCount, DEFAULT_NODE_COUNT)),
         0L);
   }
 
@@ -75,8 +75,8 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
     // Prefer the heavier "MapRetrievalCache" for nodes if lookup is expensive.
     this.nodeConnections =
         (nodeConnections instanceof TreeMap)
-            ? new MapRetrievalCache<N, GraphConnections<N, V>>(nodeConnections)
-            : new MapIteratorCache<N, GraphConnections<N, V>>(nodeConnections);
+            ? new MapRetrievalCache<>(nodeConnections)
+            : new MapIteratorCache<>(nodeConnections);
     this.edgeCount = checkNonNegative(edgeCount);
   }
 
@@ -86,12 +86,12 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
   }
 
   @Override
-  public boolean isDirected() {
+  public final boolean isDirected() {
     return isDirected;
   }
 
   @Override
-  public boolean allowsSelfLoops() {
+  public final boolean allowsSelfLoops() {
     return allowsSelfLoops;
   }
 
@@ -102,52 +102,53 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
 
   @Override
   public Set<N> adjacentNodes(N node) {
-    return checkedConnections(node).adjacentNodes();
+    return nodeInvalidatableSet(checkedConnections(node).adjacentNodes(), node);
   }
 
   @Override
   public Set<N> predecessors(N node) {
-    return checkedConnections(node).predecessors();
+    return nodeInvalidatableSet(checkedConnections(node).predecessors(), node);
   }
 
   @Override
   public Set<N> successors(N node) {
-    return checkedConnections(node).successors();
+    return nodeInvalidatableSet(checkedConnections(node).successors(), node);
   }
 
   @Override
   public Set<EndpointPair<N>> incidentEdges(N node) {
-    final GraphConnections<N, V> connections = checkedConnections(node);
-
-    return new IncidentEdgeSet<N>(this, node) {
-      @Override
-      public Iterator<EndpointPair<N>> iterator() {
-        return connections.incidentEdgeIterator(node);
-      }
-    };
+    GraphConnections<N, V> connections = checkedConnections(node);
+    IncidentEdgeSet<N> incident =
+        new IncidentEdgeSet<N>(this, node, IncidentEdgeSet.EdgeType.BOTH) {
+          @Override
+          public Iterator<EndpointPair<N>> iterator() {
+            return connections.incidentEdgeIterator(node);
+          }
+        };
+    return nodeInvalidatableSet(incident, node);
   }
 
   @Override
   public boolean hasEdgeConnecting(N nodeU, N nodeV) {
-    return hasEdgeConnecting_internal(checkNotNull(nodeU), checkNotNull(nodeV));
+    return hasEdgeConnectingInternal(checkNotNull(nodeU), checkNotNull(nodeV));
   }
 
   @Override
   public boolean hasEdgeConnecting(EndpointPair<N> endpoints) {
     checkNotNull(endpoints);
     return isOrderingCompatible(endpoints)
-        && hasEdgeConnecting_internal(endpoints.nodeU(), endpoints.nodeV());
+        && hasEdgeConnectingInternal(endpoints.nodeU(), endpoints.nodeV());
   }
 
   @Override
   public @Nullable V edgeValueOrDefault(N nodeU, N nodeV, @Nullable V defaultValue) {
-    return edgeValueOrDefault_internal(checkNotNull(nodeU), checkNotNull(nodeV), defaultValue);
+    return edgeValueOrDefaultInternal(checkNotNull(nodeU), checkNotNull(nodeV), defaultValue);
   }
 
   @Override
   public @Nullable V edgeValueOrDefault(EndpointPair<N> endpoints, @Nullable V defaultValue) {
     validateEndpoints(endpoints);
-    return edgeValueOrDefault_internal(endpoints.nodeU(), endpoints.nodeV(), defaultValue);
+    return edgeValueOrDefaultInternal(endpoints.nodeU(), endpoints.nodeV(), defaultValue);
   }
 
   @Override
@@ -155,7 +156,7 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
     return edgeCount;
   }
 
-  protected final GraphConnections<N, V> checkedConnections(N node) {
+  private final GraphConnections<N, V> checkedConnections(N node) {
     GraphConnections<N, V> connections = nodeConnections.get(node);
     if (connections == null) {
       checkNotNull(node);
@@ -164,18 +165,24 @@ class StandardValueGraph<N, V> extends AbstractValueGraph<N, V> {
     return connections;
   }
 
-  protected final boolean containsNode(@Nullable N node) {
+  final boolean containsNode(N node) {
+    checkNotNull(node);
     return nodeConnections.containsKey(node);
   }
 
-  protected final boolean hasEdgeConnecting_internal(N nodeU, N nodeV) {
+  private final boolean hasEdgeConnectingInternal(N nodeU, N nodeV) {
     GraphConnections<N, V> connectionsU = nodeConnections.get(nodeU);
     return (connectionsU != null) && connectionsU.successors().contains(nodeV);
   }
 
-  protected final V edgeValueOrDefault_internal(N nodeU, N nodeV, V defaultValue) {
+  private final @Nullable V edgeValueOrDefaultInternal(N nodeU, N nodeV, @Nullable V defaultValue) {
     GraphConnections<N, V> connectionsU = nodeConnections.get(nodeU);
     V value = (connectionsU == null) ? null : connectionsU.value(nodeV);
-    return value == null ? defaultValue : value;
+    // TODO(b/192579700): Use a ternary once it no longer confuses our nullness checker.
+    if (value == null) {
+      return defaultValue;
+    } else {
+      return value;
+    }
   }
 }

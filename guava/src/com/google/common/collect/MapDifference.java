@@ -19,7 +19,7 @@ package com.google.common.collect;
 import com.google.common.annotations.GwtCompatible;
 import com.google.errorprone.annotations.DoNotMock;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An object representing the differences between two maps.
@@ -29,7 +29,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 @DoNotMock("Use Maps.difference")
 @GwtCompatible
-public interface MapDifference<K, V> {
+public interface MapDifference<K extends @Nullable Object, V extends @Nullable Object> {
   /**
    * Returns {@code true} if there are no differences between the two maps; that is, if the maps are
    * equal.
@@ -72,10 +72,10 @@ public interface MapDifference<K, V> {
   /**
    * Returns the hash code for this instance. This is defined as the hash code of
    *
-   * <pre>{@code
+   * {@snippet :
    * Arrays.asList(entriesOnlyOnLeft(), entriesOnlyOnRight(),
    *     entriesInCommon(), entriesDiffering())
-   * }</pre>
+   * }
    */
   @Override
   int hashCode();
@@ -87,11 +87,13 @@ public interface MapDifference<K, V> {
    * @since 2.0
    */
   @DoNotMock("Use Maps.difference")
-  interface ValueDifference<V> {
+  interface ValueDifference<V extends @Nullable Object> {
     /** Returns the value from the left map (possibly null). */
+    @ParametricNullness
     V leftValue();
 
     /** Returns the value from the right map (possibly null). */
+    @ParametricNullness
     V rightValue();
 
     /**

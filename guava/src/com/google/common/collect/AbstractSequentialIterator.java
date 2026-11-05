@@ -18,7 +18,7 @@ package com.google.common.collect;
 
 import com.google.common.annotations.GwtCompatible;
 import java.util.NoSuchElementException;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * This class provides a skeletal implementation of the {@code Iterator} interface for sequences
@@ -27,14 +27,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * <p>Example:
  *
- * <pre>{@code
+ * {@snippet :
  * Iterator<Integer> powersOfTwo =
  *     new AbstractSequentialIterator<Integer>(1) {
  *       protected Integer computeNext(Integer previous) {
  *         return (previous == 1 << 30) ? null : previous * 2;
  *       }
  *     };
- * }</pre>
+ * }
  *
  * @author Chris Povirk
  * @since 12.0 (in Guava as {@code AbstractLinkedIterator} since 8.0)
@@ -65,13 +65,11 @@ public abstract class AbstractSequentialIterator<T> extends UnmodifiableIterator
 
   @Override
   public final T next() {
-    if (!hasNext()) {
+    if (nextOrNull == null) {
       throw new NoSuchElementException();
     }
-    try {
-      return nextOrNull;
-    } finally {
-      nextOrNull = computeNext(nextOrNull);
-    }
+    T oldNext = nextOrNull;
+    nextOrNull = computeNext(oldNext);
+    return oldNext;
   }
 }

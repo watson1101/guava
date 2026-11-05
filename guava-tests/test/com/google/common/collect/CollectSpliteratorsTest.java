@@ -14,11 +14,14 @@
 
 package com.google.common.collect;
 
+import static com.google.common.collect.Lists.charactersOf;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.annotations.GwtCompatible;
+import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Ascii;
 import com.google.common.collect.testing.SpliteratorTester;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Spliterator;
@@ -26,15 +29,20 @@ import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullMarked;
 
 /** Tests for {@code CollectSpliterators}. */
 @GwtCompatible
+@NullMarked
 public class CollectSpliteratorsTest extends TestCase {
+  @GwtIncompatible
   public void testMap() {
     SpliteratorTester.of(
             () ->
                 CollectSpliterators.map(
-                    Arrays.spliterator(new String[] {"a", "b", "c", "d", "e"}), Ascii::toUpperCase))
+                    Arrays.spliterator(new String[] {"a", "b", "c", "d", "e"}),
+                    0,
+                    Ascii::toUpperCase))
         .expect("A", "B", "C", "D", "E");
   }
 
@@ -43,7 +51,7 @@ public class CollectSpliteratorsTest extends TestCase {
             () ->
                 CollectSpliterators.flatMap(
                     Arrays.spliterator(new String[] {"abc", "", "de", "f", "g", ""}),
-                    (String str) -> Lists.charactersOf(str).spliterator(),
+                    (String str) -> charactersOf(str).spliterator(),
                     Spliterator.SIZED | Spliterator.DISTINCT | Spliterator.NONNULL,
                     7))
         .expect('a', 'b', 'c', 'd', 'e', 'f', 'g');
@@ -54,7 +62,7 @@ public class CollectSpliteratorsTest extends TestCase {
             () ->
                 CollectSpliterators.flatMap(
                     Arrays.spliterator(new String[] {"abc", "", "de", "f", "g", ""}),
-                    (String str) -> str.isEmpty() ? null : Lists.charactersOf(str).spliterator(),
+                    (String str) -> str.isEmpty() ? null : charactersOf(str).spliterator(),
                     Spliterator.SIZED | Spliterator.DISTINCT | Spliterator.NONNULL,
                     7))
         .expect('a', 'b', 'c', 'd', 'e', 'f', 'g');
@@ -99,7 +107,7 @@ public class CollectSpliteratorsTest extends TestCase {
     multiset.add("b", 1);
     multiset.add("c", 2);
 
-    List<String> actualValues = Lists.newArrayList();
+    List<String> actualValues = new ArrayList<>();
     multiset.spliterator().forEachRemaining(actualValues::add);
     assertThat(multiset).containsExactly("a", "a", "a", "b", "c", "c").inOrder();
   }

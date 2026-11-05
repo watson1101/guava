@@ -20,24 +20,29 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.graph.Graphs.checkNonNegative;
 
-import com.google.common.annotations.Beta;
-import com.google.common.base.Optional;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.DoNotMock;
 
 /**
  * A builder for constructing instances of {@link MutableGraph} or {@link ImmutableGraph} with
  * user-defined properties.
  *
- * <p>A graph built by this class will have the following properties by default:
+ * <p>A {@code Graph} built by this class has the following default properties:
  *
  * <ul>
  *   <li>does not allow self-loops
- *   <li>orders {@link Graph#nodes()} in the order in which the elements were added
+ *   <li>orders {@link Graph#nodes()} in the order in which the elements were added (insertion
+ *       order)
  * </ul>
+ *
+ * <p>{@code Graph}s built by this class also guarantee that each collection-returning accessor
+ * returns a <b>(live) unmodifiable view</b>; see <a
+ * href="https://github.com/google/guava/wiki/GraphsExplained#accessor-behavior">the external
+ * documentation</a> for details.
  *
  * <p>Examples of use:
  *
- * <pre>{@code
+ * {@snippet :
  * // Building a mutable graph
  * MutableGraph<String> graph = GraphBuilder.undirected().allowsSelfLoops(true).build();
  * graph.putEdge("bread", "bread");
@@ -53,7 +58,7 @@ import com.google.errorprone.annotations.DoNotMock;
  *         .putEdge("chocolate", "peanut butter")
  *         .putEdge("peanut butter", "jelly")
  *         .build();
- * }</pre>
+ * }
  *
  * @author James Sexton
  * @author Joshua O'Madadhain
@@ -62,7 +67,6 @@ import com.google.errorprone.annotations.DoNotMock;
  *     constructed based on an existing {@code Graph} using {@link #from(Graph)}.
  * @since 20.0
  */
-@Beta
 @DoNotMock
 public final class GraphBuilder<N> extends AbstractGraphBuilder<N> {
 
@@ -117,6 +121,7 @@ public final class GraphBuilder<N> extends AbstractGraphBuilder<N> {
    *
    * <p>The default value is {@code false}.
    */
+  @CanIgnoreReturnValue
   public GraphBuilder<N> allowsSelfLoops(boolean allowsSelfLoops) {
     this.allowsSelfLoops = allowsSelfLoops;
     return this;
@@ -127,8 +132,9 @@ public final class GraphBuilder<N> extends AbstractGraphBuilder<N> {
    *
    * @throws IllegalArgumentException if {@code expectedNodeCount} is negative
    */
+  @CanIgnoreReturnValue
   public GraphBuilder<N> expectedNodeCount(int expectedNodeCount) {
-    this.expectedNodeCount = Optional.of(checkNonNegative(expectedNodeCount));
+    this.expectedNodeCount = checkNonNegative(expectedNodeCount);
     return this;
   }
 
@@ -154,6 +160,7 @@ public final class GraphBuilder<N> extends AbstractGraphBuilder<N> {
    *
    * @throws IllegalArgumentException if {@code incidentEdgeOrder} is not either {@code
    *     ElementOrder.unordered()} or {@code ElementOrder.stable()}.
+   * @since 29.0
    */
   public <N1 extends N> GraphBuilder<N1> incidentEdgeOrder(ElementOrder<N1> incidentEdgeOrder) {
     checkArgument(
@@ -169,7 +176,7 @@ public final class GraphBuilder<N> extends AbstractGraphBuilder<N> {
 
   /** Returns an empty {@link MutableGraph} with the properties of this {@link GraphBuilder}. */
   public <N1 extends N> MutableGraph<N1> build() {
-    return new StandardMutableGraph<N1>(this);
+    return new StandardMutableGraph<>(this);
   }
 
   GraphBuilder<N> copy() {

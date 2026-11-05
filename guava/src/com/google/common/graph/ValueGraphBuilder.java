@@ -20,23 +20,28 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.graph.Graphs.checkNonNegative;
 
-import com.google.common.annotations.Beta;
-import com.google.common.base.Optional;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 /**
  * A builder for constructing instances of {@link MutableValueGraph} or {@link ImmutableValueGraph}
  * with user-defined properties.
  *
- * <p>A graph built by this class will have the following properties by default:
+ * <p>A {@code ValueGraph} built by this class has the following default properties:
  *
  * <ul>
  *   <li>does not allow self-loops
- *   <li>orders {@link Graph#nodes()} in the order in which the elements were added
+ *   <li>orders {@link ValueGraph#nodes()} in the order in which the elements were added (insertion
+ *       order)
  * </ul>
+ *
+ * <p>{@code ValueGraph}s built by this class also guarantee that each collection-returning accessor
+ * returns a <b>(live) unmodifiable view</b>; see <a
+ * href="https://github.com/google/guava/wiki/GraphsExplained#accessor-behavior">the external
+ * documentation</a> for details.
  *
  * <p>Examples of use:
  *
- * <pre>{@code
+ * {@snippet :
  * // Building a mutable value graph
  * MutableValueGraph<String, Double> graph =
  *     ValueGraphBuilder.undirected().allowsSelfLoops(true).build();
@@ -53,7 +58,7 @@ import com.google.common.base.Optional;
  *         .putEdgeValue("San Jose", "San Jose", 0.0)
  *         .putEdgeValue("San Francisco", "San Jose", 48.4)
  *         .build();
- * }</pre>
+ * }
  *
  * @author James Sexton
  * @author Joshua O'Madadhain
@@ -65,7 +70,6 @@ import com.google.common.base.Optional;
  *     #from(ValueGraph)}.
  * @since 20.0
  */
-@Beta
 public final class ValueGraphBuilder<N, V> extends AbstractGraphBuilder<N> {
 
   /** Creates a new instance with the specified edge directionality. */
@@ -121,6 +125,7 @@ public final class ValueGraphBuilder<N, V> extends AbstractGraphBuilder<N> {
    *
    * <p>The default value is {@code false}.
    */
+  @CanIgnoreReturnValue
   public ValueGraphBuilder<N, V> allowsSelfLoops(boolean allowsSelfLoops) {
     this.allowsSelfLoops = allowsSelfLoops;
     return this;
@@ -131,8 +136,9 @@ public final class ValueGraphBuilder<N, V> extends AbstractGraphBuilder<N> {
    *
    * @throws IllegalArgumentException if {@code expectedNodeCount} is negative
    */
+  @CanIgnoreReturnValue
   public ValueGraphBuilder<N, V> expectedNodeCount(int expectedNodeCount) {
-    this.expectedNodeCount = Optional.of(checkNonNegative(expectedNodeCount));
+    this.expectedNodeCount = checkNonNegative(expectedNodeCount);
     return this;
   }
 
@@ -158,6 +164,7 @@ public final class ValueGraphBuilder<N, V> extends AbstractGraphBuilder<N> {
    *
    * @throws IllegalArgumentException if {@code incidentEdgeOrder} is not either {@code
    *     ElementOrder.unordered()} or {@code ElementOrder.stable()}.
+   * @since 29.0
    */
   public <N1 extends N> ValueGraphBuilder<N1, V> incidentEdgeOrder(
       ElementOrder<N1> incidentEdgeOrder) {
@@ -171,6 +178,7 @@ public final class ValueGraphBuilder<N, V> extends AbstractGraphBuilder<N> {
     newBuilder.incidentEdgeOrder = checkNotNull(incidentEdgeOrder);
     return newBuilder;
   }
+
   /**
    * Returns an empty {@link MutableValueGraph} with the properties of this {@link
    * ValueGraphBuilder}.

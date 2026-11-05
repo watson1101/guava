@@ -19,24 +19,24 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.math.DoubleUtils.ensureNonNegative;
 import static com.google.common.math.StatsAccumulator.calculateNewMeanNonFinite;
-import static com.google.common.primitives.Doubles.isFinite;
 import static java.lang.Double.NaN;
 import static java.lang.Double.doubleToLongBits;
+import static java.lang.Double.isFinite;
 import static java.lang.Double.isNaN;
 
-import com.google.common.annotations.Beta;
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Objects;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.stream.Collector;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A bundle of statistical summary values -- sum, count, mean/average, min and max, and several
@@ -55,14 +55,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * <p>Static convenience methods called {@code meanOf} are also provided for users who wish to
  * calculate <i>only</i> the mean.
  *
- * <p><b>Java 8 users:</b> If you are not using any of the variance statistics, you may wish to use
+ * <p><b>Java 8+ users:</b> If you are not using any of the variance statistics, you may wish to use
  * built-in JDK libraries instead of this class.
  *
  * @author Pete Gillin
  * @author Kevin Bourrillion
  * @since 20.0
  */
-@Beta
+@J2ktIncompatible
 @GwtIncompatible
 public final class Stats implements Serializable {
 
@@ -125,9 +125,9 @@ public final class Stats implements Serializable {
    * @param values a series of values
    */
   public static Stats of(double... values) {
-    StatsAccumulator acummulator = new StatsAccumulator();
-    acummulator.addAll(values);
-    return acummulator.snapshot();
+    StatsAccumulator accumulator = new StatsAccumulator();
+    accumulator.addAll(values);
+    return accumulator.snapshot();
   }
 
   /**
@@ -136,9 +136,9 @@ public final class Stats implements Serializable {
    * @param values a series of values
    */
   public static Stats of(int... values) {
-    StatsAccumulator acummulator = new StatsAccumulator();
-    acummulator.addAll(values);
-    return acummulator.snapshot();
+    StatsAccumulator accumulator = new StatsAccumulator();
+    accumulator.addAll(values);
+    return accumulator.snapshot();
   }
 
   /**
@@ -148,9 +148,9 @@ public final class Stats implements Serializable {
    *     cause loss of precision for longs of magnitude over 2^53 (slightly over 9e15))
    */
   public static Stats of(long... values) {
-    StatsAccumulator acummulator = new StatsAccumulator();
-    acummulator.addAll(values);
-    return acummulator.snapshot();
+    StatsAccumulator accumulator = new StatsAccumulator();
+    accumulator.addAll(values);
+    return accumulator.snapshot();
   }
 
   /**
@@ -161,7 +161,7 @@ public final class Stats implements Serializable {
    * the values using {@link #toStats()} instead.
    *
    * @param values a series of values
-   * @since 28.2
+   * @since 28.2 (but only since 33.4.0 in the Android flavor)
    */
   public static Stats of(DoubleStream values) {
     return values
@@ -177,7 +177,7 @@ public final class Stats implements Serializable {
    * the values using {@link #toStats()} instead.
    *
    * @param values a series of values
-   * @since 28.2
+   * @since 28.2 (but only since 33.4.0 in the Android flavor)
    */
   public static Stats of(IntStream values) {
     return values
@@ -194,7 +194,7 @@ public final class Stats implements Serializable {
    *
    * @param values a series of values, which will be converted to {@code double} values (this may
    *     cause loss of precision for longs of magnitude over 2^53 (slightly over 9e15))
-   * @since 28.2
+   * @since 28.2 (but only since 33.4.0 in the Android flavor)
    */
   public static Stats of(LongStream values) {
     return values
@@ -211,7 +211,7 @@ public final class Stats implements Serializable {
    * <p>If you have any of the primitive streams {@code DoubleStream}, {@code IntStream}, or {@code
    * LongStream}, you should use the factory method {@link #of} instead.
    *
-   * @since 28.2
+   * @since 28.2 (but only since 33.4.0 in the Android flavor)
    */
   public static Collector<Number, StatsAccumulator, Stats> toStats() {
     return Collector.of(
@@ -237,7 +237,7 @@ public final class Stats implements Serializable {
    * <p>If these values are a sample drawn from a population, this is also an unbiased estimator of
    * the arithmetic mean of the population.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains {@link Double#NaN} then the result is {@link Double#NaN}. If it
    * contains both {@link Double#POSITIVE_INFINITY} and {@link Double#NEGATIVE_INFINITY} then the
@@ -259,7 +259,7 @@ public final class Stats implements Serializable {
   /**
    * Returns the sum of the values.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains {@link Double#NaN} then the result is {@link Double#NaN}. If it
    * contains both {@link Double#POSITIVE_INFINITY} and {@link Double#NEGATIVE_INFINITY} then the
@@ -280,7 +280,7 @@ public final class Stats implements Serializable {
    * is not guaranteed to return zero when the dataset consists of the same value multiple times,
    * due to numerical errors. However, it is guaranteed never to return a negative result.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains any non-finite values ({@link Double#POSITIVE_INFINITY}, {@link
    * Double#NEGATIVE_INFINITY}, or {@link Double#NaN}) then the result is {@link Double#NaN}.
@@ -307,7 +307,7 @@ public final class Stats implements Serializable {
    * is not guaranteed to return zero when the dataset consists of the same value multiple times,
    * due to numerical errors. However, it is guaranteed never to return a negative result.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains any non-finite values ({@link Double#POSITIVE_INFINITY}, {@link
    * Double#NEGATIVE_INFINITY}, or {@link Double#NaN}) then the result is {@link Double#NaN}.
@@ -327,7 +327,7 @@ public final class Stats implements Serializable {
    * <p>This is not guaranteed to return zero when the dataset consists of the same value multiple
    * times, due to numerical errors. However, it is guaranteed never to return a negative result.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains any non-finite values ({@link Double#POSITIVE_INFINITY}, {@link
    * Double#NEGATIVE_INFINITY}, or {@link Double#NaN}) then the result is {@link Double#NaN}.
@@ -353,7 +353,7 @@ public final class Stats implements Serializable {
    * <p>This is not guaranteed to return zero when the dataset consists of the same value multiple
    * times, due to numerical errors. However, it is guaranteed never to return a negative result.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains any non-finite values ({@link Double#POSITIVE_INFINITY}, {@link
    * Double#NEGATIVE_INFINITY}, or {@link Double#NaN}) then the result is {@link Double#NaN}.
@@ -367,7 +367,7 @@ public final class Stats implements Serializable {
   /**
    * Returns the lowest value in the dataset. The count must be non-zero.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains {@link Double#NaN} then the result is {@link Double#NaN}. If it
    * contains {@link Double#NEGATIVE_INFINITY} and not {@link Double#NaN} then the result is {@link
@@ -385,7 +385,7 @@ public final class Stats implements Serializable {
   /**
    * Returns the highest value in the dataset. The count must be non-zero.
    *
-   * <h3>Non-finite values</h3>
+   * <h4>Non-finite values</h4>
    *
    * <p>If the dataset contains {@link Double#NaN} then the result is {@link Double#NaN}. If it
    * contains {@link Double#POSITIVE_INFINITY} and not {@link Double#NaN} then the result is {@link
@@ -424,11 +424,11 @@ public final class Stats implements Serializable {
       return false;
     }
     Stats other = (Stats) obj;
-    return (count == other.count)
-        && (doubleToLongBits(mean) == doubleToLongBits(other.mean))
-        && (doubleToLongBits(sumOfSquaresOfDeltas) == doubleToLongBits(other.sumOfSquaresOfDeltas))
-        && (doubleToLongBits(min) == doubleToLongBits(other.min))
-        && (doubleToLongBits(max) == doubleToLongBits(other.max));
+    return count == other.count
+        && doubleToLongBits(mean) == doubleToLongBits(other.mean)
+        && doubleToLongBits(sumOfSquaresOfDeltas) == doubleToLongBits(other.sumOfSquaresOfDeltas)
+        && doubleToLongBits(min) == doubleToLongBits(other.min)
+        && doubleToLongBits(max) == doubleToLongBits(other.max);
   }
 
   /**
@@ -439,7 +439,7 @@ public final class Stats implements Serializable {
    */
   @Override
   public int hashCode() {
-    return Objects.hashCode(count, mean, sumOfSquaresOfDeltas, min, max);
+    return Objects.hash(count, mean, sumOfSquaresOfDeltas, min, max);
   }
 
   @Override

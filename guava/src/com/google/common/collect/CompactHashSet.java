@@ -20,10 +20,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.CollectPreconditions.checkRemove;
 import static com.google.common.collect.CompactHashing.UNSET;
 import static com.google.common.collect.Hashing.smearedHash;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
@@ -40,11 +43,12 @@ import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Consumer;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * CompactHashSet is an implementation of a Set. All optional operations (adding and removing) are
@@ -74,11 +78,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @author Jon Noack
  */
 @GwtIncompatible // not worth using in GWT for now
-class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
+class CompactHashSet<E extends @Nullable Object> extends AbstractSet<E> implements Serializable {
   // TODO(user): cache all field accesses in local vars
 
   /** Creates an empty {@code CompactHashSet} instance. */
-  public static <E> CompactHashSet<E> create() {
+  public static <E extends @Nullable Object> CompactHashSet<E> create() {
     return new CompactHashSet<>();
   }
 
@@ -89,7 +93,8 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * @param collection the elements that the set should contain
    * @return a new {@code CompactHashSet} containing those elements (minus duplicates)
    */
-  public static <E> CompactHashSet<E> create(Collection<? extends E> collection) {
+  public static <E extends @Nullable Object> CompactHashSet<E> create(
+      Collection<? extends E> collection) {
     CompactHashSet<E> set = createWithExpectedSize(collection.size());
     set.addAll(collection);
     return set;
@@ -103,7 +108,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * @return a new {@code CompactHashSet} containing those elements (minus duplicates)
    */
   @SafeVarargs
-  public static <E> CompactHashSet<E> create(E... elements) {
+  public static <E extends @Nullable Object> CompactHashSet<E> create(E... elements) {
     CompactHashSet<E> set = createWithExpectedSize(elements.length);
     Collections.addAll(set, elements);
     return set;
@@ -118,7 +123,8 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    *     elements without resizing
    * @throws IllegalArgumentException if {@code expectedSize} is negative
    */
-  public static <E> CompactHashSet<E> createWithExpectedSize(int expectedSize) {
+  public static <E extends @Nullable Object> CompactHashSet<E> createWithExpectedSize(
+      int expectedSize) {
     return new CompactHashSet<>(expectedSize);
   }
 
@@ -135,6 +141,10 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * implementation. Experimentally determined.
    */
   private static final int MAX_HASH_BUCKET_LENGTH = 9;
+
+  // See CompactHashMap for a detailed description of how the following fields work. That
+  // description talks about `keys`, `values`, and `entries`; here the `keys` and `values` arrays
+  // are replaced by a single `elements` array but everything else works similarly.
 
   /**
    * The hashtable object. This can be either:
@@ -155,7 +165,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    *   <li>null, if no entries have yet been added to the map
    * </ul>
    */
-  @Nullable private transient Object table;
+  private transient @Nullable Object table;
 
   /**
    * Contains the logical entries, in the range of [0, size()). The high bits of each int are the
@@ -165,9 +175,9 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    *
    * <pre>
    * hash  = aaaaaaaa
-   * mask  = 0000ffff
-   * next  = 0000bbbb
-   * entry = aaaabbbb
+   * mask  = 00000fff
+   * next  = 00000bbb
+   * entry = aaaaabbb
    * </pre>
    *
    * <p>The pointers in [size(), entries.length) are all "null" (UNSET).
@@ -178,7 +188,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * The elements contained in the set, in the range of [0, size()). The elements in [size(),
    * elements.length) are all {@code null}.
    */
-  @VisibleForTesting transient Object @Nullable [] elements;
+  @VisibleForTesting transient @Nullable Object @Nullable [] elements;
 
   /**
    * Keeps track of metadata like the number of hash table bits and modifications of this data
@@ -214,8 +224,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
   }
 
   /** Returns whether arrays need to be allocated. */
-  @VisibleForTesting
-  boolean needsAllocArrays() {
+  final boolean needsAllocArrays() {
     return table == null;
   }
 
@@ -237,8 +246,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
 
   @SuppressWarnings("unchecked")
   @VisibleForTesting
-  @Nullable
-  Set<E> delegateOrNull() {
+  final @Nullable Set<E> delegateOrNull() {
     if (table instanceof Set) {
       return (Set<E>) table;
     }
@@ -249,13 +257,11 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
     return new LinkedHashSet<>(tableSize, 1.0f);
   }
 
-  @SuppressWarnings("unchecked")
-  @VisibleForTesting
   @CanIgnoreReturnValue
   Set<E> convertToHashFloodingResistantImplementation() {
     Set<E> newDelegate = createHashFloodingResistantDelegate(hashTableMask() + 1);
     for (int i = firstEntryIndex(); i >= 0; i = getSuccessor(i)) {
-      newDelegate.add((E) elements[i]);
+      newDelegate.add(element(i));
     }
     this.table = newDelegate;
     this.entries = null;
@@ -281,35 +287,35 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
     return (1 << (metadata & CompactHashing.HASH_TABLE_BITS_MASK)) - 1;
   }
 
-  void incrementModCount() {
+  final void incrementModCount() {
     metadata += CompactHashing.MODIFICATION_COUNT_INCREMENT;
   }
 
   @CanIgnoreReturnValue
   @Override
-  public boolean add(@Nullable E object) {
+  public final boolean add(@ParametricNullness E object) {
     if (needsAllocArrays()) {
       allocArrays();
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       return delegate.add(object);
     }
-    int[] entries = this.entries;
-    Object[] elements = this.elements;
+    int[] entries = requireEntries();
+    @Nullable Object[] elements = requireElements();
 
     int newEntryIndex = this.size; // current size, and pointer to the entry to be appended
     int newSize = newEntryIndex + 1;
     int hash = smearedHash(object);
     int mask = hashTableMask();
     int tableIndex = hash & mask;
-    int next = CompactHashing.tableGet(table, tableIndex);
+    int next = CompactHashing.tableGet(requireTable(), tableIndex);
     if (next == UNSET) { // uninitialized bucket
       if (newSize > mask) {
         // Resize and add new entry
         mask = resizeTable(mask, CompactHashing.newCapacity(mask), hash, newEntryIndex);
       } else {
-        CompactHashing.tableSet(table, tableIndex, newEntryIndex + 1);
+        CompactHashing.tableSet(requireTable(), tableIndex, newEntryIndex + 1);
       }
     } else {
       int entryIndex;
@@ -320,7 +326,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
         entryIndex = next - 1;
         entry = entries[entryIndex];
         if (CompactHashing.getHashPrefix(entry, mask) == hashPrefix
-            && Objects.equal(object, elements[entryIndex])) {
+            && Objects.equals(object, elements[entryIndex])) {
           return false;
         }
         next = CompactHashing.getNext(entry, mask);
@@ -348,18 +354,17 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
   /**
    * Creates a fresh entry with the specified object at the specified position in the entry arrays.
    */
-  void insertEntry(int entryIndex, @Nullable E object, int hash, int mask) {
-    this.entries[entryIndex] = CompactHashing.maskCombine(hash, UNSET, mask);
-    this.elements[entryIndex] = object;
+  void insertEntry(int entryIndex, @ParametricNullness E object, int hash, int mask) {
+    setEntry(entryIndex, CompactHashing.maskCombine(hash, UNSET, mask));
+    setElement(entryIndex, object);
   }
 
   /** Resizes the entries storage if necessary. */
   private void resizeMeMaybe(int newSize) {
-    int entriesSize = entries.length;
+    int entriesSize = requireEntries().length;
     if (newSize > entriesSize) {
       // 1.5x but round up to nearest odd (this is optimal for memory consumption on Android)
-      int newCapacity =
-          Math.min(CompactHashing.MAX_SIZE, (entriesSize + Math.max(1, entriesSize >>> 1)) | 1);
+      int newCapacity = min(CompactHashing.MAX_SIZE, (entriesSize + max(1, entriesSize >>> 1)) | 1);
       if (newCapacity != entriesSize) {
         resizeEntries(newCapacity);
       }
@@ -371,12 +376,12 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * the current capacity.
    */
   void resizeEntries(int newCapacity) {
-    this.entries = Arrays.copyOf(entries, newCapacity);
-    this.elements = Arrays.copyOf(elements, newCapacity);
+    this.entries = Arrays.copyOf(requireEntries(), newCapacity);
+    this.elements = Arrays.copyOf(requireElements(), newCapacity);
   }
 
   @CanIgnoreReturnValue
-  private int resizeTable(int mask, int newCapacity, int targetHash, int targetEntryIndex) {
+  private int resizeTable(int oldMask, int newCapacity, int targetHash, int targetEntryIndex) {
     Object newTable = CompactHashing.createTable(newCapacity);
     int newMask = newCapacity - 1;
 
@@ -385,25 +390,25 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
       CompactHashing.tableSet(newTable, targetHash & newMask, targetEntryIndex + 1);
     }
 
-    Object table = this.table;
-    int[] entries = this.entries;
+    Object oldTable = requireTable();
+    int[] entries = requireEntries();
 
     // Loop over current hashtable
-    for (int tableIndex = 0; tableIndex <= mask; tableIndex++) {
-      int next = CompactHashing.tableGet(table, tableIndex);
-      while (next != UNSET) {
-        int entryIndex = next - 1;
-        int entry = entries[entryIndex];
+    for (int oldTableIndex = 0; oldTableIndex <= oldMask; oldTableIndex++) {
+      int oldNext = CompactHashing.tableGet(oldTable, oldTableIndex);
+      while (oldNext != UNSET) {
+        int entryIndex = oldNext - 1;
+        int oldEntry = entries[entryIndex];
 
         // Rebuild hash using entry hashPrefix and tableIndex ("hashSuffix")
-        int hash = CompactHashing.getHashPrefix(entry, mask) | tableIndex;
+        int hash = CompactHashing.getHashPrefix(oldEntry, oldMask) | oldTableIndex;
 
         int newTableIndex = hash & newMask;
         int newNext = CompactHashing.tableGet(newTable, newTableIndex);
-        CompactHashing.tableSet(newTable, newTableIndex, next);
+        CompactHashing.tableSet(newTable, newTableIndex, oldNext);
         entries[entryIndex] = CompactHashing.maskCombine(hash, newNext, newMask);
 
-        next = CompactHashing.getNext(entry, mask);
+        oldNext = CompactHashing.getNext(oldEntry, oldMask);
       }
     }
 
@@ -413,26 +418,26 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
   }
 
   @Override
-  public boolean contains(@Nullable Object object) {
+  public final boolean contains(@Nullable Object object) {
     if (needsAllocArrays()) {
       return false;
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       return delegate.contains(object);
     }
     int hash = smearedHash(object);
     int mask = hashTableMask();
-    int next = CompactHashing.tableGet(table, hash & mask);
+    int next = CompactHashing.tableGet(requireTable(), hash & mask);
     if (next == UNSET) {
       return false;
     }
     int hashPrefix = CompactHashing.getHashPrefix(hash, mask);
     do {
       int entryIndex = next - 1;
-      int entry = entries[entryIndex];
+      int entry = entry(entryIndex);
       if (CompactHashing.getHashPrefix(entry, mask) == hashPrefix
-          && Objects.equal(object, elements[entryIndex])) {
+          && Objects.equals(object, element(entryIndex))) {
         return true;
       }
       next = CompactHashing.getNext(entry, mask);
@@ -442,18 +447,24 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
 
   @CanIgnoreReturnValue
   @Override
-  public boolean remove(@Nullable Object object) {
+  public final boolean remove(@Nullable Object object) {
     if (needsAllocArrays()) {
       return false;
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       return delegate.remove(object);
     }
     int mask = hashTableMask();
     int index =
         CompactHashing.remove(
-            object, /* value= */ null, mask, table, entries, elements, /* values= */ null);
+            object,
+            /* value= */ null,
+            mask,
+            requireTable(),
+            requireEntries(),
+            requireElements(),
+            /* values= */ null);
     if (index == -1) {
       return false;
     }
@@ -469,10 +480,13 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
    * Moves the last entry in the entry array into {@code dstIndex}, and nulls out its old position.
    */
   void moveLastEntry(int dstIndex, int mask) {
+    Object table = requireTable();
+    int[] entries = requireEntries();
+    @Nullable Object[] elements = requireElements();
     int srcIndex = size() - 1;
     if (dstIndex < srcIndex) {
       // move last entry to deleted spot
-      @Nullable Object object = elements[srcIndex];
+      Object object = elements[srcIndex];
       elements[dstIndex] = object;
       elements[srcIndex] = null;
 
@@ -523,8 +537,8 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
   }
 
   @Override
-  public Iterator<E> iterator() {
-    @Nullable Set<E> delegate = delegateOrNull();
+  public final Iterator<E> iterator() {
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       return delegate.iterator();
     }
@@ -538,15 +552,15 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
         return currentIndex >= 0;
       }
 
-      @SuppressWarnings("unchecked") // known to be Es
       @Override
+      @ParametricNullness
       public E next() {
         checkForConcurrentModification();
         if (!hasNext()) {
           throw new NoSuchElementException();
         }
         indexToRemove = currentIndex;
-        E result = (E) elements[currentIndex];
+        E result = element(currentIndex);
         currentIndex = getSuccessor(currentIndex);
         return result;
       }
@@ -556,7 +570,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
         checkForConcurrentModification();
         checkRemove(indexToRemove >= 0);
         incrementExpectedModCount();
-        CompactHashSet.this.remove(elements[indexToRemove]);
+        CompactHashSet.this.remove(element(indexToRemove));
         currentIndex = adjustAfterRemove(currentIndex, indexToRemove);
         indexToRemove = -1;
       }
@@ -565,7 +579,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
         expectedMetadata += CompactHashing.MODIFICATION_COUNT_INCREMENT;
       }
 
-      private void checkForConcurrentModification() {
+      void checkForConcurrentModification() {
         if (metadata != expectedMetadata) {
           throw new ConcurrentModificationException();
         }
@@ -578,59 +592,60 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
     if (needsAllocArrays()) {
       return Spliterators.spliterator(new Object[0], Spliterator.DISTINCT | Spliterator.ORDERED);
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     return (delegate != null)
         ? delegate.spliterator()
-        : Spliterators.spliterator(elements, 0, size, Spliterator.DISTINCT | Spliterator.ORDERED);
+        : Spliterators.spliterator(
+            requireElements(), 0, size, Spliterator.DISTINCT | Spliterator.ORDERED);
   }
 
-  @SuppressWarnings("unchecked") // known to be Es
   @Override
-  public void forEach(Consumer<? super E> action) {
+  public final void forEach(Consumer<? super E> action) {
     checkNotNull(action);
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       delegate.forEach(action);
     } else {
       for (int i = firstEntryIndex(); i >= 0; i = getSuccessor(i)) {
-        action.accept((E) elements[i]);
+        action.accept(element(i));
       }
     }
   }
 
   @Override
-  public int size() {
-    @Nullable Set<E> delegate = delegateOrNull();
+  public final int size() {
+    Set<E> delegate = delegateOrNull();
     return (delegate != null) ? delegate.size() : size;
   }
 
   @Override
-  public boolean isEmpty() {
+  public final boolean isEmpty() {
     return size() == 0;
   }
 
   @Override
-  public Object[] toArray() {
+  public @Nullable Object[] toArray() {
     if (needsAllocArrays()) {
       return new Object[0];
     }
-    @Nullable Set<E> delegate = delegateOrNull();
-    return (delegate != null) ? delegate.toArray() : Arrays.copyOf(elements, size);
+    Set<E> delegate = delegateOrNull();
+    return (delegate != null) ? delegate.toArray() : Arrays.copyOf(requireElements(), size);
   }
 
   @CanIgnoreReturnValue
   @Override
-  public <T> T[] toArray(T[] a) {
+  @SuppressWarnings("nullness") // b/192354773 in our checker affects toArray declarations
+  public <T extends @Nullable Object> T[] toArray(T[] a) {
     if (needsAllocArrays()) {
       if (a.length > 0) {
         a[0] = null;
       }
       return a;
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     return (delegate != null)
         ? delegate.toArray(a)
-        : ObjectArrays.toArrayImpl(elements, 0, size, a);
+        : ObjectArrays.toArrayImpl(requireElements(), 0, size, a);
   }
 
   /**
@@ -641,7 +656,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
     if (needsAllocArrays()) {
       return;
     }
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       Set<E> newDelegate = createHashFloodingResistantDelegate(size());
       newDelegate.addAll(delegate);
@@ -649,7 +664,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
       return;
     }
     int size = this.size;
-    if (size < entries.length) {
+    if (size < requireEntries().length) {
       resizeEntries(size);
     }
     int minimumTableSize = CompactHashing.tableSize(size);
@@ -665,7 +680,7 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
       return;
     }
     incrementModCount();
-    @Nullable Set<E> delegate = delegateOrNull();
+    Set<E> delegate = delegateOrNull();
     if (delegate != null) {
       metadata =
           Ints.constrainToRange(size(), CompactHashing.DEFAULT_SIZE, CompactHashing.MAX_SIZE);
@@ -673,13 +688,14 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
       table = null;
       size = 0;
     } else {
-      Arrays.fill(elements, 0, size, null);
-      CompactHashing.tableClear(table);
-      Arrays.fill(entries, 0, size, 0);
+      Arrays.fill(requireElements(), 0, size, null);
+      CompactHashing.tableClear(requireTable());
+      Arrays.fill(requireEntries(), 0, size, 0);
       this.size = 0;
     }
   }
 
+  @J2ktIncompatible
   private void writeObject(ObjectOutputStream stream) throws IOException {
     stream.defaultWriteObject();
     stream.writeInt(size());
@@ -689,16 +705,53 @@ class CompactHashSet<E> extends AbstractSet<E> implements Serializable {
   }
 
   @SuppressWarnings("unchecked")
+  @J2ktIncompatible
   private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
     stream.defaultReadObject();
     int elementCount = stream.readInt();
     if (elementCount < 0) {
       throw new InvalidObjectException("Invalid size: " + elementCount);
     }
-    init(elementCount);
+    init(min(elementCount, 256));
     for (int i = 0; i < elementCount; i++) {
       E element = (E) stream.readObject();
       add(element);
     }
+  }
+
+  @J2ktIncompatible private static final long serialVersionUID = -6187423658046915740L;
+
+  /*
+   * For discussion of the safety of the following methods, see the comments near the end of
+   * CompactHashMap.
+   */
+
+  private Object requireTable() {
+    return requireNonNull(table);
+  }
+
+  private int[] requireEntries() {
+    return requireNonNull(entries);
+  }
+
+  private @Nullable Object[] requireElements() {
+    return requireNonNull(elements);
+  }
+
+  @SuppressWarnings("unchecked")
+  private E element(int i) {
+    return (E) requireElements()[i];
+  }
+
+  private int entry(int i) {
+    return requireEntries()[i];
+  }
+
+  private void setElement(int i, E value) {
+    requireElements()[i] = value;
+  }
+
+  private void setEntry(int i, int value) {
+    requireEntries()[i] = value;
   }
 }

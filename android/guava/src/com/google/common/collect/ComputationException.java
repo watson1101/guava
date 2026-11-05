@@ -17,7 +17,9 @@
 package com.google.common.collect;
 
 import com.google.common.annotations.GwtCompatible;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
+import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Wraps an exception that occurred during a computation.
@@ -36,9 +38,9 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 @GwtCompatible
 public class ComputationException extends RuntimeException {
   /** Creates a new instance with the given cause. */
-  public ComputationException(@NullableDecl Throwable cause) {
+  public ComputationException(@Nullable Throwable cause) {
     super(cause);
   }
 
-  private static final long serialVersionUID = 0;
+  @GwtIncompatible @J2ktIncompatible private static final long serialVersionUID = 0;
 }

@@ -17,15 +17,15 @@
 package com.google.common.graph;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Maps.asMap;
 
-import com.google.common.annotations.Beta;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import com.google.common.graph.GraphConstants.Presence;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.Immutable;
+import com.google.errorprone.annotations.InlineMe;
 
 /**
  * A {@link Graph} whose elements and structural relationships will never change. Instances of this
@@ -43,14 +43,13 @@ import com.google.errorprone.annotations.Immutable;
  * @param <N> Node parameter type
  * @since 20.0
  */
-@Beta
 @Immutable(containerOf = {"N"})
-public class ImmutableGraph<N> extends ForwardingGraph<N> {
+public final class ImmutableGraph<N> extends ForwardingGraph<N> {
   @SuppressWarnings("Immutable") // The backing graph must be immutable.
   private final BaseGraph<N> backingGraph;
 
   ImmutableGraph(BaseGraph<N> backingGraph) {
-    this.backingGraph = backingGraph;
+    this.backingGraph = checkNotNull(backingGraph);
   }
 
   /** Returns an immutable copy of {@code graph}. */
@@ -67,6 +66,9 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
    *
    * @deprecated no need to use this
    */
+  @InlineMe(
+      replacement = "checkNotNull(graph)",
+      staticImports = "com.google.common.base.Preconditions.checkNotNull")
   @Deprecated
   public static <N> ImmutableGraph<N> copyOf(ImmutableGraph<N> graph) {
     return checkNotNull(graph);
@@ -86,7 +88,7 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
     for (N node : graph.nodes()) {
       nodeConnections.put(node, connectionsOf(graph, node));
     }
-    return nodeConnections.build();
+    return nodeConnections.buildOrThrow();
   }
 
   @SuppressWarnings("unchecked")
@@ -95,12 +97,11 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
         (Function<N, Presence>) Functions.constant(Presence.EDGE_EXISTS);
     return graph.isDirected()
         ? DirectedGraphConnections.ofImmutable(node, graph.incidentEdges(node), edgeValueFn)
-        : UndirectedGraphConnections.ofImmutable(
-            Maps.asMap(graph.adjacentNodes(node), edgeValueFn));
+        : UndirectedGraphConnections.ofImmutable(asMap(graph.adjacentNodes(node), edgeValueFn));
   }
 
   @Override
-  protected BaseGraph<N> delegate() {
+  BaseGraph<N> delegate() {
     return backingGraph;
   }
 
@@ -108,7 +109,7 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
    * A builder for creating {@link ImmutableGraph} instances, especially {@code static final}
    * graphs. Example:
    *
-   * <pre>{@code
+   * {@snippet :
    * static final ImmutableGraph<Country> COUNTRY_ADJACENCY_GRAPH =
    *     GraphBuilder.undirected()
    *         .<Country>immutable()
@@ -117,7 +118,7 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
    *         .putEdge(GERMANY, BELGIUM)
    *         .addNode(ICELAND)
    *         .build();
-   * }</pre>
+   * }
    *
    * <p>Builder instances can be reused; it is safe to call {@link #build} multiple times to build
    * multiple graphs in series. Each new graph contains all the elements of the ones created before
@@ -125,14 +126,14 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
    *
    * @since 28.0
    */
-  public static class Builder<N> {
+  public static final class Builder<N> {
 
     private final MutableGraph<N> mutableGraph;
 
     Builder(GraphBuilder<N> graphBuilder) {
       // The incidentEdgeOrder for immutable graphs is always stable. However, we don't want to
       // modify this builder, so we make a copy instead.
-      this.mutableGraph = graphBuilder.copy().incidentEdgeOrder(ElementOrder.<N>stable()).build();
+      this.mutableGraph = graphBuilder.copy().incidentEdgeOrder(ElementOrder.stable()).build();
     }
 
     /**
@@ -194,7 +195,7 @@ public class ImmutableGraph<N> extends ForwardingGraph<N> {
      * Returns a newly-created {@code ImmutableGraph} based on the contents of this {@code Builder}.
      */
     public ImmutableGraph<N> build() {
-      return ImmutableGraph.copyOf(mutableGraph);
+      return copyOf(mutableGraph);
     }
   }
 }

@@ -16,44 +16,48 @@
 
 package com.google.common.util.concurrent;
 
+import static java.util.concurrent.Executors.newFixedThreadPool;
+import static java.util.concurrent.TimeUnit.SECONDS;
+
 import com.google.common.annotations.GwtIncompatible;
+import com.google.common.annotations.J2ktIncompatible;
+import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import junit.framework.TestCase;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * Basher test for {@link AtomicLongMap}.
  *
  * @author mike nonemacher
  */
+@J2ktIncompatible // threads
 @GwtIncompatible // threads
-
+@NullUnmarked
 public class AtomicLongMapBasherTest extends TestCase {
   private final Random random = new Random(301);
 
-  public void testModify_basher() throws InterruptedException {
+  public void testModify_basher() throws Exception {
     int nTasks = 3000;
     int nThreads = 100;
-    final int getsPerTask = 1000;
-    final int deltaRange = 10000;
-    final String key = "key";
+    int getsPerTask = 1000;
+    int deltaRange = 10000;
+    String key = "key";
 
-    final AtomicLong sum = new AtomicLong();
-    final AtomicLongMap<String> map = AtomicLongMap.create();
+    AtomicLongMap<String> map = AtomicLongMap.create();
 
-    ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
+    ExecutorService threadPool = newFixedThreadPool(nThreads);
+    ArrayList<Future<Long>> futures = new ArrayList<>();
     for (int i = 0; i < nTasks; i++) {
-      @SuppressWarnings("unused") // go/futurereturn-lsc
-      Future<?> possiblyIgnoredError =
+      futures.add(
           threadPool.submit(
-              new Runnable() {
+              new Callable<Long>() {
                 @Override
-                public void run() {
-                  int threadSum = 0;
+                public Long call() {
+                  long threadSum = 0;
                   for (int j = 0; j < getsPerTask; j++) {
                     long delta = random.nextInt(deltaRange);
                     int behavior = random.nextInt(10);
@@ -106,14 +110,16 @@ public class AtomicLongMapBasherTest extends TestCase {
                         throw new AssertionError();
                     }
                   }
-                  sum.addAndGet(threadSum);
+                  return threadSum;
                 }
-              });
+              }));
     }
-
     threadPool.shutdown();
-    assertTrue(threadPool.awaitTermination(300, TimeUnit.SECONDS));
-
-    assertEquals(sum.get(), map.get(key));
+    assertTrue(threadPool.awaitTermination(300, SECONDS));
+    long sum = 0;
+    for (Future<Long> f : futures) {
+      sum += f.get();
+    }
+    assertEquals(sum, map.get(key));
   }
 }

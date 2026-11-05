@@ -18,6 +18,9 @@ import static java.lang.Double.doubleToRawLongBits;
 import static java.lang.Double.longBitsToDouble;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -32,13 +35,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * Double#doubleToRawLongBits}, which differs from both the primitive double {@code ==} operator and
  * from {@link Double#equals}, as if implemented by:
  *
- * <pre>{@code
+ * {@snippet :
  * static boolean bitEquals(double x, double y) {
  *   long xBits = Double.doubleToRawLongBits(x);
  *   long yBits = Double.doubleToRawLongBits(y);
  *   return xBits == yBits;
  * }
- * }</pre>
+ * }
  *
  * <p>It is possible to write a more scalable updater, at the cost of giving up strict atomicity.
  * See for example <a
@@ -49,7 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Martin Buchholz
  * @since 11.0
  */
-public class AtomicDouble extends Number implements java.io.Serializable {
+public class AtomicDouble extends Number {
   private static final long serialVersionUID = 0L;
 
   // We would use AtomicLongFieldUpdater, but it has issues on some Android devices.
@@ -127,7 +130,7 @@ public class AtomicDouble extends Number implements java.io.Serializable {
    * href="#bitEquals">bitwise equal</a> to the expected value.
    *
    * <p>May <a
-   * href="http://download.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/package-summary.html#Spurious">
+   * href="https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/atomic/package-summary.html#Spurious">
    * fail spuriously</a> and does not provide ordering guarantees, so is only rarely an appropriate
    * alternative to {@code compareAndSet}.
    *
@@ -163,6 +166,7 @@ public class AtomicDouble extends Number implements java.io.Serializable {
    *
    * @param delta the value to add
    * @return the updated value
+   * @since 31.1
    */
   @CanIgnoreReturnValue
   public final double addAndGet(double delta) {
@@ -225,15 +229,14 @@ public class AtomicDouble extends Number implements java.io.Serializable {
    *
    * @serialData The current value is emitted (a {@code double}).
    */
-  private void writeObject(java.io.ObjectOutputStream s) throws java.io.IOException {
+  private void writeObject(ObjectOutputStream s) throws IOException {
     s.defaultWriteObject();
 
     s.writeDouble(get());
   }
 
   /** Reconstitutes the instance from a stream (that is, deserializes it). */
-  private void readObject(java.io.ObjectInputStream s)
-      throws java.io.IOException, ClassNotFoundException {
+  private void readObject(ObjectInputStream s) throws IOException, ClassNotFoundException {
     s.defaultReadObject();
     value = new AtomicLong();
     set(s.readDouble());

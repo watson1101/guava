@@ -15,13 +15,16 @@
  */
 package com.google.common.collect;
 
+import static com.google.common.collect.Lists.cartesianProduct;
+import static com.google.common.collect.Lists.transform;
 import static com.google.common.truth.Truth.assertWithMessage;
+import static java.lang.Math.max;
+import static java.util.Arrays.asList;
+import static java.util.Collections.nCopies;
 
-import com.google.common.annotations.GwtCompatible;
 import com.google.common.annotations.GwtIncompatible;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,13 +32,15 @@ import java.util.function.BiConsumer;
 import java.util.function.IntToDoubleFunction;
 import java.util.function.Supplier;
 import junit.framework.TestCase;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jspecify.annotations.NullUnmarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Abstract superclass for tests that hash flooding a collection has controlled worst-case
  * performance.
  */
-@GwtCompatible
+@GwtIncompatible
+@NullUnmarked
 public abstract class AbstractHashFloodingTest<T> extends TestCase {
   private final List<Construction<T>> constructions;
   private final IntToDoubleFunction constructionAsymptotics;
@@ -108,7 +113,7 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
   @FunctionalInterface
   interface Construction<T> {
     @CanIgnoreReturnValue
-    abstract T create(List<?> keys);
+    T create(List<?> keys);
 
     static Construction<Map<Object, Object>> mapFromKeys(
         Supplier<Map<Object, Object>> mutableSupplier) {
@@ -152,11 +157,20 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
     }
 
     static final QueryOp<Map<Object, Object>> MAP_GET =
-        QueryOp.create("Map.get", Map::get, Math::log);
+        create(
+            "Map.get",
+            (map, key) -> {
+              Object unused = map.get(key);
+            },
+            Math::log);
 
-    @SuppressWarnings("ReturnValueIgnored")
     static final QueryOp<Set<Object>> SET_CONTAINS =
-        QueryOp.create("Set.contains", Set::contains, Math::log);
+        create(
+            "Set.contains",
+            (set, key) -> {
+              boolean unused = set.contains(key);
+            },
+            Math::log);
 
     abstract void apply(T collection, Object query);
 
@@ -167,15 +181,16 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
    * Returns a list of objects with the same hash code, of size 2^power, counting calls to equals,
    * hashCode, and compareTo in counter.
    */
-  static List<CountsHashCodeAndEquals> createAdversarialInput(int power, CallsCounter counter) {
+  private static List<CountsHashCodeAndEquals> createAdversarialInput(
+      int power, CallsCounter counter) {
     String str1 = "Aa";
     String str2 = "BB";
     assertEquals(str1.hashCode(), str2.hashCode());
-    List<String> haveSameHashes2 = Arrays.asList(str1, str2);
+    List<String> haveSameHashes2 = asList(str1, str2);
     List<CountsHashCodeAndEquals> result =
-        Lists.newArrayList(
-            Lists.transform(
-                Lists.cartesianProduct(Collections.nCopies(power, haveSameHashes2)),
+        new ArrayList<>(
+            transform(
+                cartesianProduct(nCopies(power, haveSameHashes2)),
                 strs ->
                     new CountsHashCodeAndEquals(
                         String.join("", strs),
@@ -188,7 +203,6 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
     return result;
   }
 
-  @GwtIncompatible
   public void testResistsHashFloodingInConstruction() {
     CallsCounter smallCounter = new CallsCounter();
     List<CountsHashCodeAndEquals> haveSameHashesSmall = createAdversarialInput(10, smallCounter);
@@ -221,7 +235,6 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
     }
   }
 
-  @GwtIncompatible
   public void testResistsHashFloodingOnQuery() {
     CallsCounter smallCounter = new CallsCounter();
     List<CountsHashCodeAndEquals> haveSameHashesSmall = createAdversarialInput(10, smallCounter);
@@ -259,7 +272,7 @@ public abstract class AbstractHashFloodingTest<T> extends TestCase {
     for (Object o : haveSameHashes) {
       counter.zero();
       query.apply(collection, o);
-      worstOps = Math.max(worstOps, counter.total());
+      worstOps = max(worstOps, counter.total());
     }
     return worstOps;
   }

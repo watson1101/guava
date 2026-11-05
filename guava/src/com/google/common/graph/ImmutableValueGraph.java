@@ -17,13 +17,14 @@
 package com.google.common.graph;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Maps.asMap;
+import static java.util.Objects.requireNonNull;
 
-import com.google.common.annotations.Beta;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.Immutable;
+import com.google.errorprone.annotations.InlineMe;
 
 /**
  * A {@link ValueGraph} whose elements and structural relationships will never change. Instances of
@@ -40,7 +41,6 @@ import com.google.errorprone.annotations.Immutable;
  * @param <V> Value parameter type
  * @since 20.0
  */
-@Beta
 @Immutable(containerOf = {"N", "V"})
 @SuppressWarnings("Immutable") // Extends StandardValueGraph but uses ImmutableMaps.
 public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
@@ -61,6 +61,9 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
    *
    * @deprecated no need to use this
    */
+  @InlineMe(
+      replacement = "checkNotNull(graph)",
+      staticImports = "com.google.common.base.Preconditions.checkNotNull")
   @Deprecated
   public static <N, V> ImmutableValueGraph<N, V> copyOf(ImmutableValueGraph<N, V> graph) {
     return checkNotNull(graph);
@@ -73,7 +76,7 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
 
   @Override
   public ImmutableGraph<N> asGraph() {
-    return new ImmutableGraph<N>(this); // safe because the view is effectively immutable
+    return new ImmutableGraph<>(this); // safe because the view is effectively immutable
   }
 
   private static <N, V> ImmutableMap<N, GraphConnections<N, V>> getNodeConnections(
@@ -85,30 +88,26 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
     for (N node : graph.nodes()) {
       nodeConnections.put(node, connectionsOf(graph, node));
     }
-    return nodeConnections.build();
+    return nodeConnections.buildOrThrow();
   }
 
-  private static <N, V> GraphConnections<N, V> connectionsOf(
-      final ValueGraph<N, V> graph, final N node) {
+  private static <N, V> GraphConnections<N, V> connectionsOf(ValueGraph<N, V> graph, N node) {
     Function<N, V> successorNodeToValueFn =
-        new Function<N, V>() {
-          @Override
-          public V apply(N successorNode) {
-            return graph.edgeValueOrDefault(node, successorNode, null);
-          }
-        };
+        (N successorNode) ->
+            // requireNonNull is safe because the endpoint pair comes from the graph.
+            requireNonNull(graph.edgeValueOrDefault(node, successorNode, null));
     return graph.isDirected()
         ? DirectedGraphConnections.ofImmutable(
             node, graph.incidentEdges(node), successorNodeToValueFn)
         : UndirectedGraphConnections.ofImmutable(
-            Maps.asMap(graph.adjacentNodes(node), successorNodeToValueFn));
+            asMap(graph.adjacentNodes(node), successorNodeToValueFn));
   }
 
   /**
    * A builder for creating {@link ImmutableValueGraph} instances, especially {@code static final}
    * graphs. Example:
    *
-   * <pre>{@code
+   * {@snippet :
    * static final ImmutableValueGraph<City, Distance> CITY_ROAD_DISTANCE_GRAPH =
    *     ValueGraphBuilder.undirected()
    *         .<City, Distance>immutable()
@@ -117,7 +116,7 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
    *         .putEdgeValue(BERLIN, BRUSSELS, kilometers(764))
    *         .addNode(REYKJAVIK)
    *         .build();
-   * }</pre>
+   * }
    *
    * <p>Builder instances can be reused; it is safe to call {@link #build} multiple times to build
    * multiple graphs in series. Each new graph contains all the elements of the ones created before
@@ -125,15 +124,14 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
    *
    * @since 28.0
    */
-  public static class Builder<N, V> {
+  public static final class Builder<N, V> {
 
     private final MutableValueGraph<N, V> mutableValueGraph;
 
     Builder(ValueGraphBuilder<N, V> graphBuilder) {
       // The incidentEdgeOrder for immutable graphs is always stable. However, we don't want to
       // modify this builder, so we make a copy instead.
-      this.mutableValueGraph =
-          graphBuilder.copy().incidentEdgeOrder(ElementOrder.<N>stable()).build();
+      this.mutableValueGraph = graphBuilder.copy().incidentEdgeOrder(ElementOrder.stable()).build();
     }
 
     /**
@@ -201,7 +199,7 @@ public final class ImmutableValueGraph<N, V> extends StandardValueGraph<N, V> {
      * Builder}.
      */
     public ImmutableValueGraph<N, V> build() {
-      return ImmutableValueGraph.copyOf(mutableValueGraph);
+      return copyOf(mutableValueGraph);
     }
   }
 }
